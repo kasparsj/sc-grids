@@ -97,19 +97,20 @@ ScGrids {
 			[113,   0,  56,   0, 255,   0,   0,   0,  85,   0,  56,   0, 226,   0,   0,   0,   0,   0, 170,   0,   0,   0, 141,   0,  28,   0,  28,   0, 198,   0,  28,   0]]
 	];
 
-	*calculateLevel {|instrument, curBeat=0, x=0.0, y=0.0, bias=0.0|
-		var iBetween, jBetween, level, drumMap;
-		var a, b, c, d, i, j;
-
-		drumMap = switch (instrument.asSymbol,
+	*drumMap { |instrument|
+		^switch (instrument.asSymbol,
 			\hihat, {hihatMap},
 			\kick, {kickMap},
 			\snare, {snareMap},
 			{"% is an unknown instrument, fallback to kick".format(instrument).postln; kickMap}
 		);
+	}
 
-		// make sure we stick in 0..31
-		curBeat = curBeat.asInteger%32;
+	*getMap { |instrument, x=0.0, y=0.0|
+		var iBetween, jBetween, level, map;
+		var a, b, c, d, i, j;
+
+		map = this.drumMap(instrument);
 
 		x = x.clip(0, 1);
 		y = y.clip(0, 1);
@@ -121,21 +122,37 @@ ScGrids {
 		j = y.div(0.25).clip(0, 3);
 
 		// get values from the 4 (2x2) maps
-		a = drumMap[i][j][curBeat];
-		b = drumMap[i+1][j][curBeat];
-		c = drumMap[i][j+1][curBeat];
-		d = drumMap[i+1][j+1][curBeat];
+		a = map[i][j];
+		b = map[i+1][j];
+		c = map[i][j+1];
+		d = map[i+1][j+1];
 
 		// calc the position between the two maps
 		iBetween = (x/0.25)%1;
 		jBetween = (y/0.25)%1;
 
 		// calc the mix of the map according to the between positions
-		level = (iBetween*a)+((1-iBetween)*b)+(jBetween*c)+((1-jBetween)*d)/2;
+		^32.collect { |beat|
+			(iBetween*a[beat])+((1-iBetween)*b[beat])+(jBetween*c[beat])+((1-jBetween)*d[beat])/2;
+		};
+	}
+
+	*calculateLevel {|instrument, curBeat=0, x=0.0, y=0.0, bias=0.0, normalize=true|
+		var map, level;
+
+		map = this.getMap(instrument, x, y);
+
+		// make sure we stick in 0..31
+		curBeat = curBeat.asInteger%32;
+
+		level = map[curBeat];
+		if (normalize) {
+			level = level / map.maxItem * 255.0;
+		};
 
 		// return the level
 		// bias can be seen as adding randomness
-		^(level/256+(bias));
+		^(level/255+(bias));
 	}
 }
 
@@ -173,7 +190,7 @@ Pgrids : Pattern {
 					indices = levels.selectIndices({|level| level>(1-densityVal)});
 					if(indices.isEmpty, {
 						// yield silence
-						Rest().yield;
+						inval = Rest().yield;
 					}, {
 						durations = (indices.shift(-1, 32) - indices)*1/16;
 						b = Pseq(durations).asStream;
@@ -222,7 +239,7 @@ PgridsValue : Pattern {
 					});
 					indices = levels.selectIndices({|level| level>(1-densityVal)});
 					if(indices.isEmpty, {
-						Rest().yield;
+						inval = Rest().yield;
 					}, {
 						values = indices.collect({|i| levels[i]});
 						b = Pseq(values).asStream;
