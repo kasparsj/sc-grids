@@ -192,7 +192,7 @@ Pgrids : Pattern {
 						// yield silence
 						inval = Rest().yield;
 					}, {
-						durations = (indices.shift(-1, 32) - indices)*1/16;
+						durations = (indices.shift(-1, 32) - indices)*1/8;
 						b = Pseq(durations).asStream;
 						while({outval = b.next; outval.notNil}, {
 							inval = outval.yield;
